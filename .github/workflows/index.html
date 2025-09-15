@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM 地端部署效能計算機 - NVIDIA RTX 6000 Ada</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft JhengHei", sans-serif;
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            animation: fadeIn 0.8s ease-in;
+        }
+
+        .header h1 {
+            font-size: 2.8rem;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.3);
+            background: linear-gradient(135deg, #76b900, #00d4ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.95;
+            color: #a8dadc;
+        }
+
+        .gpu-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #76b900, #00d4ff);
+            color: #000;
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+
+        .calculator-wrapper {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 25px;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.4);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .input-section {
+            padding: 35px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            color: #2c3e50;
+            margin-bottom: 25px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-icon {
+            font-size: 1.6rem;
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+        }
+
+        .input-group {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .input-group:hover {
+            border-color: #76b900;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(118, 185, 0, 0.2);
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 10px;
+            color: #2c3e50;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: #76b900;
+            box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.1);
+        }
+
+        .input-group .unit {
+            color: #6c757d;
+            font-size: 0.85rem;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .gpu-specs {
+            background: linear-gradient(135deg, #76b900, #00d4ff);
+            color: #000;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-weight: bold;
+        }
+
+        .calculate-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #76b900, #00d4ff);
+            color: #000;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            margin-top: 25px;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .calculate-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(118, 185, 0, 0.4);
+        }
+
+        .calculate-btn:active {
+            transform: translateY(-1px);
+        }
+
+        .results-section {
+            padding: 35px;
+            background: white;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-bottom: 35px;
+        }
+
+        .result-card {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            padding: 25px;
+            border-radius: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .result-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .result-card.primary {
+            background: linear-gradient(135deg, #76b900, #00d4ff);
+            color: #000;
+            font-weight: bold;
+        }
+
+        .result-card.warning {
+            background: linear-gradient(135deg, #ffd700, #ffa500);
+            color: #000;
+        }
+
+        .result-card h3 {
+            font-size: 1rem;
+            margin-bottom: 15px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .result-card .value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            line-height: 1;
+        }
+
+        .result-card .unit {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .result-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+            animation: rotate 10s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .detailed-results {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            padding: 25px;
+            border-radius: 15px;
+            margin-top: 25px;
+        }
+
+        .detailed-results h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #dee2e6;
+            transition: background 0.2s;
+        }
+
+        .detail-row:hover {
+            background: rgba(118, 185, 0, 0.05);
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .detail-value {
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .warning-box {
+            background: linear-gradient(135deg, #fff3cd, #ffe8a1);
+            border: 2px solid #ffc107;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 25px;
+            color: #856404;
+        }
+
+        .warning-box strong {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .success-box {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            border: 2px solid #28a745;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 25px;
+            color: #155724;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .input-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .result-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 LLM 地端部署效能計算機</h1>
+            <p>NVIDIA RTX 6000 Ada Generation (48GB GDDR6) 配置評估工具</p>
+            <span class="gpu-badge">⚡ Ada Lovelace Architecture | 91.1 TFLOPS FP32 Performance</span>
+        </div>
+
+        <div class="calculator-wrapper">
+            <div class="input-section">
+                <h2 class="section-title">
+                    <span class="section-icon">🖥️</span>
+                    硬體配置
+                </h2>
+                <div class="input-grid">
+                    <div class="input-group">
+                        <span class="gpu-specs">Ada Gen</span>
+                        <label for="servers">伺服器數量</label>
+                        <input type="number" id="servers" value="1" min="1" max="100">
+                        <div class="unit">台 (每台最少 8 Core CPU)</div>
+                    </div>
+                    <div class="input-group">
+                        <label for="gpus-per-server">每台GPU數量</label>
+                        <select id="gpus-per-server">
+                            <option value="1">1 張</option>
+                            <option value="2">2 張</option>
+                            <option value="3">3 張</option>
+                            <option value="4" selected>4 張 (最多)</option>
+                        </select>
+                        <div class="unit">RTX 6000 Ada 48GB</div>
+                    </div>
+                    <div class="input-group">
+                        <label for="system-ram">系統記憶體</label>
+                        <select id="system-ram">
+                            <option value="256">256 GB (最少)</option>
+                            <option value="384">384 GB</option>
+                            <option value="512" selected>512 GB (最多)</option>
+                        </select>
+                        <div class="unit">GB per server</div>
+                    </div>
+                    <div class="input-group">
+                        <label for="network">網路頻寬</label>
+                        <select id="network">
+                            <option value="10" selected>10 Gbps × 2</option>
+                            <option value="25">25 Gbps × 2</option>
+                            <option value="40">40 Gbps × 2</option>
+                            <option value="100">100 Gbps × 2</option>
+                        </select>
+                        <div class="unit">雙網卡配置</div>
+                    </div>
+                </div>
+
+                <h2 class="section-title" style="margin-top: 35px;">
+                    <span class="section-icon">🤖</span>
+                    LLM 模型配置
+                </h2>
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label for="model-size">模型大小</label>
+                        <select id="model-size">
+                            <option value="7">7B (如 Llama 3 7B)</option>
+                            <option value="13">13B (如 Llama 3 13B)</option>
+                            <option value="30">30B (如 CodeLlama 34B)</option>
+                            <option value="70" selected>70B (如 Llama 3 70B)</option>
+                            <option value="180">180B (如 Falcon 180B)</option>
+                            <option value="405">405B (如 Llama 3.1 405B)</option>
+                            <option value="custom">自訂</option>
+                        </select>
+                        <div class="unit">十億參數</div>
+                    </div>
+                    <div class="input-group">
+                        <label for="custom-model-size">自訂模型大小</label>
+                        <input type="number" id="custom-model-size" value="70" min="1" max="1000" disabled>
+                        <div class="unit">B (十億參數)</div>
+                    </div>
+                    <div class="input-group">
+                        <label for="quantization">量化方式</label>
+                        <select id="quantization">
+                            <option value="fp16">FP16 (半精度)</option>
+                            <option value="int8" selected>INT8 (8位元)</option>
+                            <option value="int4">INT4 (4位元)</option>
+                        </select>
+                        <div class="unit">精度選擇</div>
+                    </div>
+                    <div class="input-group">
+                        <label for="batch-size">批次大小</label>
+                        <input type="number" id="batch-size" value="16" min="1" max="256">
+                        <div class="unit">並行請求數</div>
+                    </div>
+                    <div class="input-group">
+                        <label for="context-length">上下文長度</label>
+                        <select id="context-length">
+                            <option value="2048">2K tokens</option>
+                            <option value="4096" selected>4K tokens</option>
+                            <option value="8192">8K tokens</option>
+                            <option value="16384">16K tokens</option>
+                            <option value="32768">32K tokens</option>
+                            <option value="65536">64K tokens</option>
+                        </select>
+                        <div class="unit">最大token數</div>
+                    </div>
+                    <div class="input-group">
+                        <label for="response-time">目標回應時間</label>
+                        <input type="number" id="response-time" value="1.5" min="0.5" max="10" step="0.5">
+                        <div class="unit">秒 (首token)</div>
+                    </div>
+                </div>
+
+                <button class="calculate-btn" onclick="calculatePerformance()">⚡ 立即計算</button>
+            </div>
+
+            <div class="results-section" id="results" style="display: none;">
+                <h2 class="section-title">
+                    <span class="section-icon">📊</span>
+                    效能評估結果
+                </h2>
+                
+                <div class="result-cards" id="result-cards">
+                    <!-- Results will be inserted here -->
+                </div>
+
+                <div class="detailed-results">
+                    <h3>📋 詳細分析</h3>
+                    <div id="detailed-analysis">
+                        <!-- Detailed analysis will be inserted here -->
+                    </div>
+                </div>
+
+                <div id="status-box">
+                    <!-- Status messages will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Enable/disable custom model size input
+        document.getElementById('model-size').addEventListener('change', function() {
+            const customInput = document.getElementById('custom-model-size');
+            if (this.value === 'custom') {
+                customInput.disabled = false;
+            } else {
+                customInput.disabled = true;
+                customInput.value = this.value;
+            }
+        });
+
+        function calculatePerformance() {
+            // Get input values
+            const servers = parseInt(document.getElementById('servers').value);
+            const gpusPerServer = parseInt(document.getElementById('gpus-per-server').value);
+            const systemRam = parseInt(document.getElementById('system-ram').value);
+            const networkSpeed = parseInt(document.getElementById('network').value);
+            
+            const modelSizeSelect = document.getElementById('model-size').value;
+            const modelSize = modelSizeSelect === 'custom' 
+                ? parseInt(document.getElementById('custom-model-size').value)
+                : parseInt(modelSizeSelect);
+            
+            const quantization = document.getElementById('quantization').value;
+            const batchSize = parseInt(document.getElementById('batch-size').value);
+            const contextLength = parseInt(document.getElementById('context-length').value);
+            const targetResponseTime = parseFloat(document.getElementById('response-time').value);
+
+            // Calculate total resources
+            const totalGpus = servers * gpusPerServer;
+            const totalVram = totalGpus * 48; // 48GB per RTX 6000 Ada
+            const totalSystemRam = servers * systemRam;
+            const totalNetworkBandwidth = servers * networkSpeed * 2; // Dual NICs
+
+            // Calculate model memory requirements
+            let bytesPerParam;
+            let performanceMultiplier = 1;
+            switch(quantization) {
+                case 'fp16': 
+                    bytesPerParam = 2; 
+                    performanceMultiplier = 1;
+                    break;
+                case 'int8': 
+                    bytesPerParam = 1; 
+                    performanceMultiplier = 1.5;
+                    break;
+                case 'int4': 
+                    bytesPerParam = 0.5; 
+                    performanceMultiplier = 2;
+                    break;
+            }
+            
+            const modelMemoryGB = (modelSize * bytesPerParam * 1.2); // 1.2x for overhead
+            const kvCachePerToken = 0.125; // GB per 1B params per 1K tokens
+            const kvCacheGB = (modelSize * contextLength * kvCachePerToken * batchSize) / 1000;
+            const totalMemoryRequired = modelMemoryGB + kvCacheGB;
+
+            // Check if model fits in VRAM
+            const canFitInVram = totalMemoryRequired <= totalVram;
+            
+            // Calculate performance metrics - RTX 6000 Ada specific
+            const fp32Tflops = 91.1; // RTX 6000 Ada FP32 TFLOPS
+            const tensorTflops = 1466.0 / totalGpus; // Tensor performance per GPU
+            
+            // Use appropriate compute power based on quantization
+            let effectiveTflops = fp32Tflops;
+            if (quantization === 'int8' || quantization === 'int4') {
+                effectiveTflops = tensorTflops; // Use tensor cores for INT8/INT4
+            }
+            
+            const totalCompute = totalGpus * effectiveTflops;
+            
+            // Estimate tokens per second
+            let tokensPerSecond = (totalCompute * performanceMultiplier * 1000) / (modelSize * bytesPerParam * 2);
+            
+            // Apply Ada architecture improvements
+            tokensPerSecond *= 1.15; // 15% improvement from 3rd gen RT cores and 4th gen Tensor cores
+            
+            // Adjust for batch size and context
+            const contextPenalty = Math.max(0.5, 1 - (contextLength / 65536) * 0.4);
+            tokensPerSecond = tokensPerSecond * contextPenalty;
+            
+            // Calculate concurrent users (最大同時上線人數)
+            const tokensPerUser = 150; // Average tokens per response
+            const responseTimeInSeconds = targetResponseTime;
+            const maxConcurrentUsers = Math.floor((tokensPerSecond * responseTimeInSeconds) / tokensPerUser);
+            
+            // Calculate daily capacity
+            const avgSessionDuration = 5; // minutes
+            const sessionsPerDay = (24 * 60) / avgSessionDuration;
+            const dailyUsers = maxConcurrentUsers * sessionsPerDay;
+
+            // Calculate throughput
+            const requestsPerMinute = Math.floor((tokensPerSecond * 60) / tokensPerUser);
+
+            // Display results
+            displayResults({
+                totalGpus,
+                totalVram,
+                totalSystemRam,
+                totalNetworkBandwidth,
+                modelMemoryGB,
+                kvCacheGB,
+                totalMemoryRequired,
+                canFitInVram,
+                tokensPerSecond,
+                maxConcurrentUsers,
+                dailyUsers,
+                totalCompute,
+                requestsPerMinute,
+                quantization
+            });
+        }
+
+        function displayResults(results) {
+            const resultsSection = document.getElementById('results');
+            resultsSection.style.display = 'block';
+
+            // Result cards
+            const cardsHtml = `
+                <div class="result-card primary">
+                    <h3>最大同時上線人數</h3>
+                    <div class="value">${results.maxConcurrentUsers.toLocaleString()}</div>
+                    <div class="unit">使用者</div>
+                </div>
+                <div class="result-card">
+                    <h3>Token 處理速度</h3>
+                    <div class="value">${Math.round(results.tokensPerSecond).toLocaleString()}</div>
+                    <div class="unit">tokens/秒</div>
+                </div>
+                <div class="result-card">
+                    <h3>每分鐘處理請求</h3>
+                    <div class="value">${results.requestsPerMinute.toLocaleString()}</div>
+                    <div class="unit">請求/分鐘</div>
+                </div>
+                <div class="result-card">
+                    <h3>每日服務容量</h3>
+                    <div class="value">${Math.round(results.dailyUsers / 1000)}K</div>
+                    <div class="unit">使用者/天</div>
+                </div>
+                <div class="result-card">
+                    <h3>總 VRAM 容量</h3>
+                    <div class="value">${results.totalVram}</div>
+                    <div class="unit">GB GDDR6</div>
+                </div>
+                <div class="result-card ${results.canFitInVram ? '' : 'warning'}">
+                    <h3>記憶體狀態</h3>
+                    <div class="value">${results.canFitInVram ? '✔' : '⚠️'}</div>
+                    <div class="unit">${results.canFitInVram ? '充足' : '不足'}</div>
+                </div>
+            `;
+            document.getElementById('result-cards').innerHTML = cardsHtml;
+
+            // Detailed analysis
+            const detailsHtml = `
+                <div class="detail-row">
+                    <span class="detail-label">總 GPU 數量</span>
+                    <span class="detail-value">${results.totalGpus} 張 RTX 6000 Ada</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">總算力 (FP32)</span>
+                    <span class="detail-value">${results.totalCompute.toFixed(1)} TFLOPS</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">模型記憶體需求</span>
+                    <span class="detail-value">${results.modelMemoryGB.toFixed(1)} GB</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">KV Cache 需求</span>
+                    <span class="detail-value">${results.kvCacheGB.toFixed(1)} GB</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">總記憶體需求</span>
+                    <span class="detail-value">${results.totalMemoryRequired.toFixed(1)} GB</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">VRAM 使用率</span>
+                    <span class="detail-value">${((results.totalMemoryRequired / results.totalVram) * 100).toFixed(1)}%</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">記憶體頻寬</span>
+                    <span class="detail-value">${(results.totalGpus * 960).toLocaleString()} GB/s</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">網路總頻寬</span>
+                    <span class="detail-value">${results.totalNetworkBandwidth} Gbps</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">系統記憶體總量</span>
+                    <span class="detail-value">${results.totalSystemRam} GB</span>
+                </div>
+            `;
+            document.getElementById('detailed-analysis').innerHTML = detailsHtml;
+
+            // Status messages
+            const statusBox = document.getElementById('status-box');
+            
+            if (!results.canFitInVram) {
+                statusBox.className = 'warning-box';
+                statusBox.innerHTML = `
+                    <strong>⚠️ 注意事項：</strong>
+                    <div>• 模型大小超過可用 VRAM，建議使用更小的模型或增加 GPU 數量。</div>
+                    <div>• 考慮使用 INT4 量化來減少記憶體使用。</div>
+                `;
+            } else if ((results.totalMemoryRequired / results.totalVram) > 0.85) {
+                statusBox.className = 'warning-box';
+                statusBox.innerHTML = `
+                    <strong>⚠️ 注意事項：</strong>
+                    <div>• VRAM 使用率超過 85%，可能影響效能。建議預留更多記憶體空間。</div>
+                `;
+            } else {
+                statusBox.className = 'success-box';
+                statusBox.innerHTML = `
+                    <strong>✅ 配置狀態良好：</strong>
+                    <div>• 硬體配置充足，可順利運行選定的 LLM 模型。</div>
+                    <div>• RTX 6000 Ada 提供優異的 AI 推理效能。</div>
+                    ${results.quantization === 'int8' || results.quantization === 'int4' ? 
+                        '<div>• 量化精度充分利用 Ada 架構的第 4 代 Tensor Cores。</div>' : ''}
+                `;
+            }
+            statusBox.style.display = 'block';
+
+            // Scroll to results
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Initialize with default calculation
+        window.addEventListener('load', function() {
+            // Don't auto-calculate on load
+        });
+    </script>
+</body>
+</html>
